@@ -7,6 +7,7 @@ Very simple boilerplate for static sites that I use for my projects using [Vite 
 
 ## Features
 
+- Support for : fonts, any media files, imported stylesheets and more.
 - You can choose to exclude assets from the build in the case you externalize them (I do). It keeps the same path as when you import them from the `./dev/assets/` folder.
 - All pages (`index.html`) under the `./dev/` folder are automatically processed.
 - Hot module replacement (live reload in dev mode).

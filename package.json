@@ -12,7 +12,6 @@
     "previewdev": "vite preview --open --config ./config/vite.config.js --mode development"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.20",
     "glob": "^11.0.0",
     "postcss": "^8.4.49",
     "postcss-easing-gradients": "^3.0.1",

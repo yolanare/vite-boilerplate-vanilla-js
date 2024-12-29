@@ -1,11 +1,11 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 
 // OPTIONS
 import PATHS from "./paths.js"
 
 let OPTIONS = {
-	buildWithAssets : false,
+	buildWithAssets : true,
 
 	doMinify : {
 		"production" : "esbuild",
@@ -19,16 +19,16 @@ let OPTIONS = {
 
 
 // PLUGINS
-import injectHTML from 'vite-plugin-html-inject';
+import injectHTML from "vite-plugin-html-inject";
 
 // postcss
-import postcssInlineSvg from 'postcss-inline-svg';
+import postcssInlineSvg from "postcss-inline-svg";
 import svgo from "postcss-svgo"
 import postcssNested from "postcss-nested"
 import postcssPresetEnv from "postcss-preset-env"
-import postcssEasingGradients from 'postcss-easing-gradients';
-import postcssShort from 'postcss-short';
-import postcssViewportHeightCorrection from 'postcss-viewport-height-correction'; // [POSTCSS WARNING] https://github.com/Faisal-Manzer/postcss-viewport-height-correction/issues/18
+import postcssEasingGradients from "postcss-easing-gradients";
+import postcssShort from "postcss-short";
+import postcssViewportHeightCorrection from "postcss-viewport-height-correction"; // [POSTCSS WARNING] https://github.com/Faisal-Manzer/postcss-viewport-height-correction/issues/18
 
 
 // MOVE SCRIPT TAG TO BODY END
@@ -109,10 +109,10 @@ const ignoreAssetsRollup = (buildWithAssets) => {
 			name: "ignoreAssetsRollup",
 			apply: "build",
 			generateBundle: {
-				order: 'pre',
+				order: "pre",
 				handler(options, bundle, isWrite) {
 					Object.entries(bundle).forEach((asset) => {
-						if (asset[1].type == 'asset' && asset[1].originalFileNames.length > 0) {
+						if (asset[1].type == "asset" && asset[1].originalFileNames.length > 0) {
 							if (isAsset(asset[1].originalFileNames[0])) {
 								delete bundle[asset[0]]; // do not generate asset
 							}
@@ -141,7 +141,7 @@ export default defineConfig(({ mode }) => {
 		},
 		build: {
 			outDir: OPTIONS.buildDir[mode],
-			emptyOutDir : true, // TODO exclude folders inside like ".git"
+			emptyOutDir : true,
 			assetsDir : "",
 			assetsInlineLimit : 0,
 			copyPublicDir : false,
@@ -149,26 +149,26 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				input: PATHS.pages,
 				output: {
-					chunkFileNames: 'bundle-[hash].js',
+					chunkFileNames: "bundle-[hash].js",
 					assetFileNames: (assetInfo) => {
-						// keep folder structure for external assets
+						// keep folder structure for assets
 						if (assetInfo.originalFileNames.length > 0) {
 							if (isAsset(assetInfo.originalFileNames[0])) {
 								return assetInfo.originalFileNames[0];
 							}
 						}
 						// css
-						return `bundle-[hash].[ext]`;
+						return "bundle-[hash].[ext]";
 					}
 				},
 				watch: {
-					exclude: PATHS.configDirDepth + 'node_modules/**',
-					include: PATHS.dev + '/**',
+					exclude: PATHS.configDirDepth + "node_modules/**",
+					include: PATHS.dev + "/**",
 				}
 			},
 		},
 		css: {
-			transformer: 'postcss',
+			transformer: "postcss",
 			postcss : {
 				plugins: [
 					postcssEasingGradients({ // https://github.com/larsenwork/postcss-easing-gradients / https://larsenwork.com/easing-gradients/#editor
@@ -195,7 +195,7 @@ export default defineConfig(({ mode }) => {
 						preserveEmpty: false
 					}),
 					postcssShort({ // https://github.com/csstools/postcss-short
-						skip: '_'
+						skip: "_"
 					}),
 					postcssViewportHeightCorrection(), // https://github.com/Faisal-Manzer/postcss-viewport-height-correction
 					postcssPresetEnv(), // https://github.com/csstools/postcss-plugins/tree/main/plugin-packs/postcss-preset-env // autoprefixer(), // https://github.com/postcss/autoprefixer
@@ -217,7 +217,7 @@ export default defineConfig(({ mode }) => {
 					insert : `<import-html src="import/html/noscript.html" />`
 				},
 			]), },
-			{ enforce: "pre", ...injectHTML({ tagName: 'import-html' }), },
+			{ enforce: "pre", ...injectHTML({ tagName: "import-html" }), },
 
 			// ignoreAssetsHTML(),
 			ignoreAssetsRollup(OPTIONS.buildWithAssets),

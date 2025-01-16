@@ -11,15 +11,25 @@ let OPTIONS = {
 		"production" : "esbuild",
 		"development" : false
 	},
+	doMinifyCSS : {
+		"production" : "esbuild",
+		"development" : false
+	},
 	buildDir : {
 		"production" : PATHS.buildProd,
 		"development" : PATHS.buildDev
 	},
 }
 
+const bundleMoreFiles = {
+	// "styles-system" : PATHS.dev +"/import/styles/styles-system.scss",
+	// "styles-outline" : PATHS.dev +"/import/styles/styles-outline.scss",
+}
+
 
 // PLUGINS
 import injectHTML from "vite-plugin-html-inject";
+// TODO static copy plugin
 
 // postcss
 import postcssInlineSvg from "postcss-inline-svg";
@@ -49,23 +59,36 @@ const scriptToBodyEnd = () => {
 
 
 // INSERT HTML TO ALL PAGES
-const insertToAllPagesHTML = (partitions) => {
-	/* Variables :
+const insertToAllPagesHTML = (partitions, enforceOrder = "pre") => {
+	/* VARIABLES
 	   targetRegex : /<regex.*>/g
 	   position : "before"|"after"
 	   newLine : boolean
-	   insert : "<>" 	-> if contains "%dirdepth%", will be replaced with multiple "../" to match directory detph
+	   forArray : []	-> will not insert anything if empty
+	   insert : "<>" 	-> if contains "%dirDepth%", will be replaced with multiple "../" to match directory detph
+	   					-> if "forArray" is defined, will repeat through it while replacing %forArray% for each item
 	*/
 	return {
 		name: "insertToAllPagesHTML",
 		transformIndexHtml : {
-			order: "pre",
+			order: enforceOrder,
 			handler(html, ctx) {
 				partitions.forEach((part) => {
 					part.position = (part.position) ? part.position : "";
 					part.newLine = (part.newLine) ? part.newLine : false;
+					part.forArray = (part.forArray) ? part.forArray : undefined;
 
-					const insertHTML = part.insert.replaceAll("%dirdepth%", ("../").repeat(((ctx.path.match(/\//g)||[]).length) - 1));
+					let insertHTML = part.insert.replaceAll("%dirDepth%", ("../").repeat(((ctx.path.match(/\//g)||[]).length) - 1));
+
+					if (part.forArray) {
+						const insertHTML_template = insertHTML;
+						insertHTML = "";
+
+						for (let index = 0; index < part.forArray.length; index++) {
+							insertHTML += insertHTML_template.replaceAll("%forArray%", part.forArray[index]);
+							if (index < part.forArray.length) { insertHTML += (part.newLine) ? `\n` : ""; }
+						}
+					}
 
 					html.match(part.targetRegex).forEach((targetHTML) => {
 						html = html.replaceAll(targetHTML, ""
@@ -125,12 +148,39 @@ const ignoreAssetsRollup = (buildWithAssets) => {
 };
 
 
+// REMOVE VITE HASH UPDATE MARKER IN CSS ASSETS
+const removeViteHashUpdateMarker = () => {
+	return {
+		name: "removeViteHashUpdateMarker",
+		apply: "build",
+		generateBundle: {
+			order: "pre",
+			handler(options, bundle, isWrite) {
+				// const viteHashUpdateMarker = "/*$vite$:1*/";
+				const viteHashUpdateMarkerRE = /\/\*\$vite\$:\d+\*\//;
+
+				Object.entries(bundle).forEach((asset) => {
+					if (asset[1].type == "asset" && asset[1].originalFileNames.length > 0) {
+						if ((asset[1].originalFileNames[0].endsWith('.css') || asset[1].originalFileNames[0].endsWith('.scss')) && typeof asset[1].source === "string") {
+							asset[1].source = asset[1].source.replace(viteHashUpdateMarkerRE, "");
+							// console.log("removed viteHashUpdateMarker in :", asset[1].originalFileNames[0]);
+						}
+					};
+				});
+			},
+		},
+	};
+}
+
+
 // CONFIG
 export default defineConfig(({ mode }) => {
+	OPTIONS.addAssetsToPages = [];
 	return {
 		publicDir: PATHS.dirNames.devRoot,
 		root: PATHS.dirNames.devRoot,
 		base : "./",
+
 		server : {
 			port: 8888,
 			host: true,
@@ -139,17 +189,26 @@ export default defineConfig(({ mode }) => {
 			port: 8888,
 			host: true,
 		},
+
 		build: {
-			outDir: OPTIONS.buildDir[mode],
-			emptyOutDir : true,
-			assetsDir : "",
 			assetsInlineLimit : 0,
+			assetsDir : "",
+			emptyOutDir : true,
 			copyPublicDir : false,
+
+			outDir: OPTIONS.buildDir[mode],
 			minify: OPTIONS.doMinify[mode],
+			cssMinify : OPTIONS.doMinifyCSS[mode],
+
 			rollupOptions: {
-				input: PATHS.pages,
+				input: {
+					...PATHS.pages,
+					...bundleMoreFiles
+				},
+
 				output: {
-					chunkFileNames: "bundle-[hash].js",
+					entryFileNames: "script-[hash].js",
+					chunkFileNames: "script-[hash].js",
 					assetFileNames: (assetInfo) => {
 						// keep folder structure for assets
 						if (assetInfo.originalFileNames.length > 0) {
@@ -157,16 +216,30 @@ export default defineConfig(({ mode }) => {
 								return assetInfo.originalFileNames[0];
 							}
 						}
-						// css
+
+						// ...and for other assets like css files // TOFIX css url() are kept as is so relative paths are broken
+						if (assetInfo.originalFileNames.length > 0) {
+							console.log(assetInfo);
+							OPTIONS.addAssetsToPages.push(assetInfo.originalFileNames[0]);
+							return assetInfo.originalFileNames[0];
+						}
+
+						// main css
 						return "bundle-[hash].[ext]";
-					}
+					},
 				},
+
+				plugins: [
+					removeViteHashUpdateMarker(),
+				],
+
 				watch: {
 					exclude: PATHS.configDirDepth + "node_modules/**",
 					include: PATHS.dev + "/**",
-				}
+				},
 			},
 		},
+
 		css: {
 			transformer: "postcss",
 			postcss : {
@@ -202,13 +275,14 @@ export default defineConfig(({ mode }) => {
 				]
 			}
 		},
+
 		plugins: [
 			{ enforce: "pre", ...insertToAllPagesHTML([
 				{
 					targetRegex : /<head.*>/g,
 					position : "after",
 					newLine : true,
-					insert : `<import-html src="import/html/head.html" dirdepth="%dirdepth%" />`
+					insert : `<import-html src="import/html/head.html" dirdepth="%dirDepth%" />`
 				},
 				{
 					targetRegex : /<body.*>/g,
@@ -222,7 +296,17 @@ export default defineConfig(({ mode }) => {
 			// ignoreAssetsHTML(),
 			ignoreAssetsRollup(OPTIONS.buildWithAssets),
 
-			{ enforce: "post", ...scriptToBodyEnd(), }
+			{ enforce: "post", ...insertToAllPagesHTML([
+				{
+					targetRegex : /<\/head.*>/g,
+					position : "before",
+					newLine : true,
+					forArray : OPTIONS.addAssetsToPages,
+					insert : `<link rel="stylesheet" crossorigin href="%dirDepth%%forArray%">`
+				},
+			], "post"), },
+
+			//{ enforce: "post", ...scriptToBodyEnd(), }
 		],
 	}
 });
